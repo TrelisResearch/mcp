@@ -15,6 +15,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as collaborators from './operations/collaborators.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -194,7 +195,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
-      }
+      },
+      {
+        name: "add_collaborator",
+        description: "Add a user as a read-only collaborator to a GitHub repository",
+        inputSchema: zodToJsonSchema(collaborators.AddCollaboratorSchema),
+      },
+      {
+        name: "remove_collaborator", 
+        description: "Remove a user as a collaborator from a GitHub repository",
+        inputSchema: zodToJsonSchema(collaborators.RemoveCollaboratorSchema),
+      },
     ],
   };
 });
@@ -206,6 +217,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     switch (request.params.name) {
+      case "add_collaborator": {
+        const args = collaborators.AddCollaboratorSchema.parse(request.params.arguments);
+        await collaborators.addCollaborator(args);
+        return {
+          content: [{ type: "text", text: "Successfully added collaborator with read-only access" }],
+        };
+      }
+
+      case "remove_collaborator": {
+        const args = collaborators.RemoveCollaboratorSchema.parse(request.params.arguments);
+        await collaborators.removeCollaborator(args);
+        return {
+          content: [{ type: "text", text: "Successfully removed collaborator" }],
+        };
+      }
+
       case "fork_repository": {
         const args = repository.ForkRepositorySchema.parse(request.params.arguments);
         const fork = await repository.forkRepository(args.owner, args.repo, args.organization);

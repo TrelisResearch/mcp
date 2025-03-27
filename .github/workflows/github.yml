@@ -1,0 +1,84 @@
+name: GitHub Package
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/github/**'
+      - '.github/workflows/github.yml'
+  pull_request:
+    paths:
+      - 'src/github/**'
+      - '.github/workflows/github.yml'
+  release:
+    types: [published]
+
+jobs:
+  version-check:
+    name: Check version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version consistency
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./src/github/package.json').version")
+          TS_VERSION=$(grep -o '".*"' ./src/github/common/version.ts | tr -d '"')
+
+          if [ "$PACKAGE_VERSION" != "$TS_VERSION" ]; then
+            echo "::error::Version mismatch detected!"
+            echo "::error::package.json version: $PACKAGE_VERSION"
+            echo "::error::version.ts version: $TS_VERSION"
+            exit 1
+          else
+            echo "✅ Versions match: $PACKAGE_VERSION"
+          fi
+
+  build:
+    needs: [version-check]
+    name: Build GitHub package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        working-directory: src/github
+        run: npm ci
+
+      - name: Build package
+        working-directory: src/github
+        run: npm run build
+
+  publish:
+    needs: [build]
+    if: github.event_name == 'release'
+    name: Publish GitHub package
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        working-directory: src/github
+        run: npm ci
+
+      - name: Publish package
+        working-directory: src/github
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 

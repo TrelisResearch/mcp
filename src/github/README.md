@@ -366,3 +366,63 @@ docker build -t mcp/github -f src/github/Dockerfile .
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+
+# GitHub MCP Server Fork
+
+This fork of the GitHub MCP server adds support for managing repository collaborators through the Model Context Protocol (MCP). The following functionality has been added:
+
+## New Features
+
+### Repository Collaborator Management
+
+Added two new tools for managing repository collaborators:
+
+1. `add_collaborator`
+   - Adds a user as a read-only (pull access) collaborator to a GitHub repository
+   - Parameters:
+     - `owner`: Repository owner (username or organization)
+     - `repo`: Repository name
+     - `username`: The GitHub username to add as a collaborator
+
+2. `remove_collaborator`
+   - Removes a user's collaborator access from a GitHub repository
+   - Parameters:
+     - `owner`: Repository owner (username or organization)
+     - `repo`: Repository name
+     - `username`: The GitHub username to remove as a collaborator
+
+## Implementation Details
+
+- The collaborator functionality is implemented in `src/github/operations/collaborators.ts`
+- Uses the GitHub REST API v2022-11-28 for collaborator management
+- Collaborators are added with 'pull' (read-only) permission by default
+- Proper error handling for common scenarios (e.g., user not found, insufficient permissions)
+- Integrated with the existing GitHub request utility for consistent API interaction
+
+## Usage
+
+These tools can be used through the MCP interface just like other GitHub tools. The server will handle authentication and proper GitHub API interaction automatically.
+
+Example usage through MCP:
+
+```typescript
+// Adding a collaborator
+{
+  name: "add_collaborator",
+  arguments: {
+    owner: "octocat",
+    repo: "hello-world",
+    username: "collaborator-username"
+  }
+}
+
+// Removing a collaborator
+{
+  name: "remove_collaborator",
+  arguments: {
+    owner: "octocat",
+    repo: "hello-world",
+    username: "collaborator-username"
+  }
+}
+```

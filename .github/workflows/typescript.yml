@@ -4,7 +4,21 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**/package.json'
+      - 'src/**/*.ts'
+      - 'src/**/*.js'
+      - '.github/workflows/typescript.yml'
+    paths-ignore:
+      - 'src/github/**'
   pull_request:
+    paths:
+      - 'src/**/package.json'
+      - 'src/**/*.ts'
+      - 'src/**/*.js'
+      - '.github/workflows/typescript.yml'
+    paths-ignore:
+      - 'src/github/**'
   release:
     types: [published]
 
@@ -12,18 +26,35 @@ jobs:
   detect-packages:
     runs-on: ubuntu-latest
     outputs:
-      packages: ${{ steps.find-packages.outputs.packages }}
+      packages: ${{ steps.find-changed-packages.outputs.packages }}
     steps:
       - uses: actions/checkout@v4
-      - name: Find JS packages
-        id: find-packages
-        working-directory: src
+        with:
+          fetch-depth: 0  # Needed for git diff
+
+      - name: Find changed JS packages
+        id: find-changed-packages
         run: |
-          PACKAGES=$(find . -name package.json -not -path "*/node_modules/*" -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
+          if [ "${{ github.event_name }}" == "release" ]; then
+            # For releases, build all packages
+            PACKAGES=$(find src -name package.json -not -path "*/node_modules/*" -exec dirname {} \; | sed 's/^src\///' | jq -R -s -c 'split("\n")[:-1]')
+          else
+            # For PRs and pushes, only build changed packages
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              BASE_SHA=${{ github.event.pull_request.base.sha }}
+            else
+              BASE_SHA=$(git rev-parse HEAD^)
+            fi
+            
+            CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD)
+            CHANGED_DIRS=$(echo "$CHANGED_FILES" | grep "^src/" | cut -d/ -f2 | sort -u)
+            PACKAGES=$(echo "$CHANGED_DIRS" | grep -v "^$" | jq -R -s -c 'split("\n")[:-1]')
+          fi
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
   build:
     needs: [detect-packages]
+    if: ${{ needs.detect-packages.outputs.packages != '[]' && needs.detect-packages.outputs.packages != '' }}
     strategy:
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
@@ -48,7 +79,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: [build, detect-packages]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && needs.detect-packages.outputs.packages != '[]' && needs.detect-packages.outputs.packages != ''
     environment: release
 
     strategy:
